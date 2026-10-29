@@ -1,6 +1,5 @@
 import joblib
 import pandas as pd
-import warnings
 from pathlib import Path
 from ..config import settings, TOP_COUNTRIES
 
@@ -16,9 +15,7 @@ def get_model():
             alt_path = Path(__file__).resolve().parent.parent.parent.parent / "Mental_Health_Model.pkl"
             if alt_path.exists():
                 model_path = alt_path
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            _model = joblib.load(str(model_path))
+        _model = joblib.load(str(model_path))
     return _model
 
 def _format_input_row(inputs: dict) -> pd.DataFrame:
@@ -44,9 +41,7 @@ def _format_input_row(inputs: dict) -> pd.DataFrame:
 def predict_score(inputs: dict) -> float:
     model = get_model()
     df = _format_input_row(inputs)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        raw_pred = model.predict(df)[0]
+    raw_pred = model.predict(df)[0]
     
     score = round(float(raw_pred), 2)
     # Clip to 0.0 - 10.0 scale

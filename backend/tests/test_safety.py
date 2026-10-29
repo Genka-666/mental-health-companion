@@ -46,3 +46,10 @@ def test_chat_crisis_bypasses_llm(client, sample_session_id):
     
     # Assert LLM calls counter did NOT increment
     assert db.get_llm_calls() == initial_calls
+
+
+def test_indirect_crisis_phrasing_and_word_boundaries():
+    assert detect_crisis("I'm thinking about ending everything tonight") is True
+    assert detect_crisis("I have been thinking about ending my life") is True
+    assert detect_crisis("I don't want to live anymore") is True
+    assert detect_crisis("This semester is ending and I'm stressed about exams") is False

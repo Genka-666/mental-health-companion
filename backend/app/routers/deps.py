@@ -8,7 +8,9 @@ def get_session_id(x_session_id: str = Header(None, alias="X-Session-Id")) -> st
             detail={"detail": "Missing X-Session-Id header", "code": "MISSING_SESSION_ID"}
         )
     try:
-        val = uuid.UUID(x_session_id, version=4)
+        val = uuid.UUID(x_session_id)
+        if val.version != 4:
+            raise ValueError("Expected UUIDv4")
         return str(val)
     except ValueError:
         raise HTTPException(

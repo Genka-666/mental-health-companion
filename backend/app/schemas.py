@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 class PredictRequest(BaseModel):
@@ -35,6 +35,8 @@ class PredictResponse(BaseModel):
     disclaimer: str
 
 class ChatMessage(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     role: Literal['user', 'assistant']
     content: str = Field(..., min_length=1, max_length=2000)
 

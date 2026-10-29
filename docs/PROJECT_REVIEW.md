@@ -1,5 +1,7 @@
 # Project review — 29 October 2026
 
+This is the historical baseline review. A subsequent implementation addresses several findings below; see [implementation notes](IMPLEMENTATION_NOTES.md) for changes and current verification limits.
+
 The project has a complete MVP implementation, but its current runtime and deployment readiness are unverified. Several functional issues need fixing before publication. This review covers the source, training notebook, dataset, existing tests, configuration examples, and deployment documentation. No application behavior was changed during the review.
 
 ## Product and application versions

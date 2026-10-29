@@ -1,10 +1,24 @@
 import pytest
 import os
 import uuid
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 from app.main import app
 from app import db
 from app.config import settings
+from app.services import llm
+
+
+@pytest.fixture(autouse=True)
+def mock_gemini(monkeypatch):
+    """Every test uses a fake provider unless it explicitly replaces the client."""
+    provider = MagicMock()
+    provider.models.generate_content.return_value.text = (
+        '{"reply":"I hear you. What has been on your mind?","risk":"none"}'
+    )
+    monkeypatch.setattr(llm, "_genai_client", provider)
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    return provider
 
 @pytest.fixture(autouse=True)
 def setup_test_db(tmp_path, monkeypatch):

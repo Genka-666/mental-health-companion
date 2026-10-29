@@ -2,11 +2,11 @@
 
 ## 1. Core Safety Principles
 1. **Not a Clinical Tool**: The companion is strictly an educational wellbeing self-reflection tool. It never claims to be a doctor, therapist, or diagnostic device.
-2. **Pre-LLM Safety Interception**: All incoming messages pass through a deterministic keyword crisis filter *before* any language model is ever invoked.
-3. **Hard-Coded Crisis Response**: If any self-harm or suicidal intent is detected, the server returns a fixed, verified helpline response immediately without making an LLM API call.
+2. **Pre-LLM Safety Interception**: After request validation, the latest user message passes through a deterministic keyword crisis filter before a language model is invoked. This does not guarantee detection of every expression of distress or danger.
+3. **Hard-Coded Crisis Response**: If the keyword filter detects a monitored phrase, the server returns a fixed helpline response without making an LLM API call. A valid Gemini risk classification of `crisis` also selects that fixed response.
 4. **Zero Improvised Crisis Advice**: Language models are not allowed to improvise crisis intervention instructions or advice.
 5. **Clear Persistent Disclaimers**: Disclaimers are displayed on the Welcome screen, Result screen, Chat screen, and in the global footer.
-6. **Data Minimization & Erasure**: No user identities or credentials are stored. Users can delete all records with a single click.
+6. **Data Minimization & Erasure**: The app does not request account credentials. Messages may still contain personal information supplied by the visitor. A confirmation dialog allows deletion of app-server records, including for chat-only visitors. Messages are processed by Google Gemini and app deletion does not delete provider-retained records.
 
 ---
 
@@ -19,7 +19,7 @@ Helpline numbers are centralized in `backend/app/config.py`:
 ---
 
 ## 3. Pre-LLM Keyword Filter (`backend/app/services/safety.py`)
-Incoming text is lowercased and stripped of punctuation before scanning.
+Incoming text is normalized with Unicode NFKC and case folding; invisible formatting characters are removed, and punctuation is replaced with spaces before scanning. This handles selected compatibility forms such as full-width Latin text and zero-width characters inside words, rather than every possible obfuscation.
 
 ### English Phrases Monitored:
 - `"kill myself"`
@@ -32,6 +32,8 @@ Incoming text is lowercased and stripped of punctuation before scanning.
 - `"better off without me"`
 - `"cut myself"`, `"hang myself"`, `"slit my wrists"`, `"overdose"`
 - `"wish i was dead"`, `"can't go on living"`
+- `"wish i wouldn't wake up"`, `"hope i don't wake up"` and selected expanded-contraction variants
+- `"can't keep myself safe"`, `"cannot keep myself safe"`, `"not safe with myself"`
 
 ### Hinglish Phrases Monitored:
 - `"mar jana chahta"`, `"mar jana chahti"`
@@ -62,8 +64,10 @@ The system prompt strictly commands the companion ("Saathi") to:
 ---
 
 ## 6. Audit & Test Results
-Automated test coverage (`backend/tests/test_safety.py`) verifies:
-- [x] Clear crisis phrases trigger the fixed helpline reply.
-- [x] Crisis detection results in 0 LLM calls.
-- [x] Hinglish crisis phrases are accurately identified.
-- [x] Non-crisis emotional low statements do not false-positive.
+The tests cover monitored crisis phrases, selected Hinglish phrases, selected everyday distress phrases, and the fixed-response path. Additional chat tests cover invalid response schemas, LLM-reported crisis risk and budget exhaustion.
+
+During the current revision, the existing 16 pure keyword assertions and four additional phrasing/boundary assertions passed in isolation. All 36 backend pytest cases then passed in the user's normal terminal, including the API crisis path and new Gemini-output tests. These selected cases do not establish comprehensive crisis detection, clinical safety or resistance to all prompt attacks. Prompt instructions are safeguards, not guarantees of model behavior.
+
+Never return malformed Gemini output as raw text. Validate the risk classification first: a valid `crisis` flag selects the fixed crisis reply even when generated reply text is missing or invalid. For `none` or `elevated`, the reply must also satisfy the Pydantic schema, including a non-empty string; otherwise use the fixed error fallback. Invalid JSON or an invalid/missing risk flag also uses the error fallback. Logs may include exception types, numeric HTTP status codes and fixed messages, but must exclude provider error strings, API keys and chat text. Two provider-failure tests verify those logging boundaries.
+
+After the chat refinement, all **64 backend tests passed**, including 23 new cases covering independent crisis classification, Unicode variants, ordinary stress, whitespace validation, context bounds and crisis handling with an exhausted budget. Tests use a default fake provider and temporary databases; they do not verify live model response quality.

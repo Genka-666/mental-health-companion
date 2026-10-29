@@ -8,7 +8,7 @@ load_dotenv(BASE_DIR / ".env")
 
 class Settings:
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     max_llm_calls: int = int(os.getenv("MAX_LLM_CALLS", "50"))
     
     # CORS origins as comma-separated or list

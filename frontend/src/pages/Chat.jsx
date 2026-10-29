@@ -1,279 +1,212 @@
-import React, { useState, useEffect, useRef } from 'react';
-import ChatBubble from '../components/ChatBubble';
-import TypingDots from '../components/TypingDots';
-import { api } from '../api';
+import React, { useEffect, useRef, useState } from "react";
+import ChatBubble from "../components/ChatBubble";
+import TypingDots from "../components/TypingDots";
+import Icon from "../components/Icon";
+import { api } from "../api";
 
-const CONVERSATION_STARTERS = [
-  "I'm feeling really stressed about upcoming exams.",
-  "I can't seem to sleep well lately.",
-  "I've been scrolling endlessly and feel drained.",
-  "I feel a bit lonely and just wanted to share."
+const STARTERS = [
+  ["Exam pressure", "I'm feeling stressed about upcoming exams."],
+  ["Restless nights", "I haven't been sleeping well lately."],
+  ["Too much scrolling", "I've been scrolling a lot and feel drained."],
+  ["Just need to talk", "I'm feeling lonely and wanted to share."],
 ];
 
-export default function Chat({ onOpenHelpline, initialContextMessage }) {
+export default function Chat({ onOpenHelpline, active, onBusyChange }) {
   const [messages, setMessages] = useState([
     {
-      role: 'assistant',
-      content: initialContextMessage || "Hello, I'm Saathi. I'm here to listen without judgment. How are you feeling today?"
-    }
+      role: "assistant",
+      content:
+        "Hi, I’m Saathi. You don’t need to have it all figured out to talk here. What’s been on your mind?",
+    },
   ]);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [remainingCalls, setRemainingCalls] = useState(null);
   const [errorText, setErrorText] = useState(null);
   const [hasCrisis, setHasCrisis] = useState(false);
-
-  const messagesEndRef = useRef(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const endRef = useRef(null);
+  const pendingRef = useRef(false);
+  const aliveRef = useRef(true);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (active)
+      endRef.current?.scrollIntoView({ behavior: "instant", block: "nearest" });
+  }, [messages, isTyping, active]);
 
-  const handleSendMessage = async (textToSend) => {
-    const text = (textToSend || inputValue).trim();
-    if (!text || isTyping) return;
-
+  async function handleSendMessage(textToSend) {
+    const text = (textToSend ?? inputValue).trim();
+    if (!text || pendingRef.current) return;
+    pendingRef.current = true;
+    onBusyChange(true);
     setErrorText(null);
-    const updatedMessages = [...messages, { role: 'user', content: text }];
-    setMessages(updatedMessages);
-    setInputValue('');
+    const updated = [...messages, { role: "user", content: text }];
+    setMessages(updated);
+    setInputValue("");
     setIsTyping(true);
-
     try {
-      const res = await api.chat(updatedMessages);
-      setMessages(prev => [...prev, { role: 'assistant', content: res.reply, isCrisis: res.crisis }]);
-      if (res.remaining_calls !== undefined) {
-        setRemainingCalls(res.remaining_calls);
-      }
+      const res = await api.chat(updated);
+      if (!aliveRef.current) return;
+      setMessages((previous) => [
+        ...previous,
+        { role: "assistant", content: res.reply, isCrisis: res.crisis },
+      ]);
+      setRemainingCalls(res.remaining_calls);
       if (res.crisis) {
         setHasCrisis(true);
-        if (onOpenHelpline) onOpenHelpline();
+        onOpenHelpline();
       }
     } catch (err) {
-      setErrorText(err.message || 'Trouble connecting to Saathi. Please try again.');
+      if (!aliveRef.current) return;
+      // Restore the failed draft instead of leaving an unanswered turn behind.
+      setMessages(updated.slice(0, -1));
+      setInputValue(text);
+      setErrorText(
+        err.message || "We could not send that message. Please try again.",
+      );
     } finally {
-      setIsTyping(false);
+      pendingRef.current = false;
+      onBusyChange(false);
+      if (aliveRef.current) setIsTyping(false);
     }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
+  }
 
   return (
     <div className="chat-page animate-fade-in">
-      <div className="chat-header">
-        <div>
-          <h2 className="title-sm" style={{ fontSize: '1.1rem', fontWeight: 600 }}>
-            Chat with Saathi
-          </h2>
-          <p className="text-xs" style={{ color: 'var(--muted)' }}>
-            Support companion, not a therapist. Not medical advice.
-          </p>
+      <div className="page-intro">
+        <span className="eyebrow">A moment to be heard</span>
+        <h1 className="page-title">
+          Let it out. <em>I’m listening.</em>
+        </h1>
+        <p>No perfect words needed. Start wherever you are.</p>
+      </div>
+      <section
+        className="chat-panel card"
+        aria-label="Conversation with Saathi"
+      >
+        <div className="chat-header">
+          <div className="chat-identity">
+            <span className="companion-avatar">
+              <Icon name="leaf" size={22} />
+            </span>
+            <div>
+              <strong>Saathi</strong>
+              <span className="text-xs">Your AI wellbeing companion</span>
+            </div>
+          </div>
+          <span className="chat-status">
+            <span className="status-dot" /> Here to listen
+          </span>
         </div>
-        {remainingCalls !== null && (
-          <div className="budget-tag" title="Gemini API demo call budget">
-            {remainingCalls} calls left
+        {hasCrisis && (
+          <div className="notice crisis-alert-banner" role="status">
+            <p>
+              Real support is available. In India, call{" "}
+              <a href="tel:14416">14416</a> or <a href="tel:112">112</a> in an
+              emergency.
+            </p>
+            <button className="text-button" onClick={onOpenHelpline}>
+              View support options <Icon name="arrow" size={16} />
+            </button>
           </div>
         )}
-      </div>
-
-      {hasCrisis && (
-        <div className="crisis-alert-banner">
-          <span>Immediate help is available: Call Tele-MANAS at <strong>14416</strong> or <strong>112</strong>.</span>
-          <button className="banner-call-btn" onClick={onOpenHelpline}>
-            View Numbers
-          </button>
-        </div>
-      )}
-
-      <div className="messages-container">
-        {messages.map((m, idx) => (
-          <ChatBubble
-            key={idx}
-            role={m.role}
-            content={m.content}
-            isCrisis={m.isCrisis}
-          />
-        ))}
-        {isTyping && <TypingDots />}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {messages.length <= 1 && (
-        <div className="starters-tray">
-          <span className="text-xs" style={{ color: 'var(--muted)', display: 'block', marginBottom: '0.4rem' }}>
-            Suggested prompts:
-          </span>
-          <div className="starters-scroll">
-            {CONVERSATION_STARTERS.map((st, i) => (
-              <button
-                key={i}
-                type="button"
-                className="starter-chip"
-                onClick={() => handleSendMessage(st)}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {errorText && (
-        <div className="error-toast text-sm">
-          {errorText}
-        </div>
-      )}
-
-      <div className="chat-input-bar">
-        <textarea
-          id="chat-textarea"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Share what is on your mind... (Press Enter to send)"
-          rows="1"
-          maxLength={2000}
-          className="chat-textarea"
-        />
-        <button
-          id="send-chat-btn"
-          className="btn btn-primary send-btn"
-          onClick={() => handleSendMessage()}
-          disabled={!inputValue.trim() || isTyping}
-          aria-label="Send message"
+        <div
+          className="messages-container"
+          role="log"
+          aria-label="Messages"
+          aria-live="polite"
+          aria-relevant="additions text"
         >
-          &uarr;
-        </button>
-      </div>
-
-      <style>{`
-        .chat-page {
-          display: flex;
-          flex-direction: column;
-          height: calc(100vh - 180px);
-          min-height: 500px;
-        }
-        .chat-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding-bottom: 0.75rem;
-          border-bottom: 1px solid var(--border);
-          margin-bottom: 0.75rem;
-        }
-        .budget-tag {
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--muted);
-          background: var(--bg);
-          border: 1px solid var(--border);
-          padding: 0.25rem 0.6rem;
-          border-radius: var(--radius-pill);
-        }
-        .crisis-alert-banner {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: var(--danger-soft);
-          border: 1px solid rgba(181, 73, 63, 0.3);
-          color: var(--danger);
-          padding: 0.65rem 0.85rem;
-          border-radius: var(--radius-md);
-          font-size: 0.82rem;
-          margin-bottom: 0.75rem;
-          gap: 0.5rem;
-        }
-        .banner-call-btn {
-          background: var(--danger);
-          color: #FFFFFF;
-          border: none;
-          font-size: 0.75rem;
-          font-weight: 600;
-          padding: 0.35rem 0.65rem;
-          border-radius: var(--radius-pill);
-          cursor: pointer;
-          white-space: nowrap;
-        }
-        .messages-container {
-          flex: 1;
-          overflow-y: auto;
-          padding: 0.5rem 0.25rem;
-          display: flex;
-          flex-direction: column;
-        }
-        .starters-tray {
-          margin-top: 0.5rem;
-          margin-bottom: 0.75rem;
-        }
-        .starters-scroll {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-        }
-        .starter-chip {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          color: var(--text);
-          font-size: 0.8rem;
-          padding: 0.35rem 0.75rem;
-          border-radius: var(--radius-pill);
-          cursor: pointer;
-          text-align: left;
-          transition: all 0.15s ease;
-        }
-        .starter-chip:hover {
-          background: var(--accent-soft);
-          border-color: var(--accent-soft-border);
-        }
-        .error-toast {
-          background: var(--danger-soft);
-          color: var(--danger);
-          padding: 0.5rem 0.75rem;
-          border-radius: var(--radius-sm);
-          margin-bottom: 0.5rem;
-        }
-        .chat-input-bar {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-pill);
-          padding: 0.35rem 0.5rem 0.35rem 1rem;
-          box-shadow: var(--shadow-sm);
-        }
-        .chat-textarea {
-          flex: 1;
-          border: none;
-          background: transparent;
-          font-family: inherit;
-          font-size: 0.94rem;
-          color: var(--text);
-          resize: none;
-          outline: none;
-          line-height: 1.4;
-          max-height: 100px;
-        }
-        .send-btn {
-          width: 38px;
-          height: 38px;
-          min-height: 38px;
-          padding: 0;
-          border-radius: var(--radius-pill);
-          font-size: 1.15rem;
-          font-weight: 700;
-          flex-shrink: 0;
-        }
-      `}</style>
+          <span className="conversation-date">A little space for you</span>
+          {messages.map((message, index) => (
+            <ChatBubble key={index} {...message} />
+          ))}
+          {isTyping && <TypingDots />}
+          <div ref={endRef} />
+        </div>
+        {messages.length === 1 && (
+          <div className="starters-tray">
+            <p className="text-xs">Not sure where to start?</p>
+            <div className="starters-scroll">
+              {STARTERS.map(([label, text]) => (
+                <button
+                  className="starter-chip"
+                  key={label}
+                  onClick={() => handleSendMessage(text)}
+                  disabled={isTyping}
+                >
+                  {label} <Icon name="arrow" size={14} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {errorText && (
+          <div className="notice notice-error" role="alert">
+            {errorText}
+          </div>
+        )}
+        <form
+          className="chat-input-bar"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleSendMessage();
+          }}
+        >
+          <label className="sr-only" htmlFor="chat-textarea">
+            Message to Saathi
+          </label>
+          <textarea
+            id="chat-textarea"
+            value={inputValue}
+            onChange={(event) => setInputValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            placeholder="What’s on your mind?"
+            rows={2}
+            maxLength={2000}
+            disabled={isTyping}
+            className="chat-textarea"
+            aria-describedby="chat-privacy"
+          />
+          <button
+            id="send-chat-btn"
+            type="submit"
+            className="btn btn-primary send-btn"
+            disabled={!inputValue.trim() || isTyping}
+            aria-label="Send message"
+          >
+            <Icon name="send" />
+          </button>
+        </form>
+        <div className="chat-composer-note">
+          <span>Enter to send · Shift + Enter for a new line</span>
+          <span>{inputValue.length}/2000</span>
+        </div>
+      </section>
+      <p id="chat-privacy" className="chat-privacy">
+        <Icon name="shield" size={15} /> Messages are processed by Google
+        Gemini. Avoid identifying details. Support companion, not a therapist.
+      </p>
+      {remainingCalls === 0 && (
+        <p className="notice" role="status">
+          This demo has reached its chat limit. Your check-ins and support
+          numbers are still available.
+        </p>
+      )}
     </div>
   );
 }

@@ -25,7 +25,7 @@ def chat_endpoint(req: ChatRequest, session_id: str = Depends(get_session_id)):
         # Hard-coded crisis reply: ZERO LLM calls made!
         current_calls = db.get_llm_calls()
         remaining = max(0, settings.max_llm_calls - current_calls)
-        db.save_message(session_id, "assistant", CRISIS_REPLY)
+        db.save_message(session_id, "assistant", CRISIS_REPLY, create_session=False)
         return ChatResponse(
             reply=CRISIS_REPLY,
             crisis=True,
@@ -37,7 +37,7 @@ def chat_endpoint(req: ChatRequest, session_id: str = Depends(get_session_id)):
     reply, is_crisis, remaining = call_gemini_chat(messages_payload)
 
     # Persist assistant reply
-    db.save_message(session_id, "assistant", reply)
+    db.save_message(session_id, "assistant", reply, create_session=False)
 
     return ChatResponse(
         reply=reply,

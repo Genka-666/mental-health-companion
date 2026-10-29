@@ -1,3 +1,6 @@
+import json
+
+import pytest
 from unittest.mock import MagicMock
 from app.services import llm
 from app.config import BUDGET_FALLBACK, LLM_ERROR_FALLBACK, settings
@@ -64,7 +67,7 @@ def test_chat_raw_text_json_fallback(client, sample_session_id, monkeypatch):
     )
     assert response.status_code == 200
     data = response.json()
-    assert "Take a deep breath" in data["reply"]
+    assert data["reply"] == LLM_ERROR_FALLBACK
     assert data["crisis"] is False
 
 def test_chat_api_exception_fallback(client, sample_session_id, monkeypatch):
@@ -90,3 +93,52 @@ def test_chat_invalid_last_message_role(client, sample_session_id):
         headers={"X-Session-Id": sample_session_id}
     )
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("output", [
+    "[]", "null", "{}",
+    '{"reply": "", "risk": "none"}',
+    '{"reply": "   ", "risk": "none"}',
+    '{"reply": 123, "risk": "none"}',
+    '{"reply": "Hi", "risk": "unknown"}',
+    '{"reply": "Hi", "risk": null}',
+    '{"reply": "Hi"}',
+])
+def test_chat_malformed_output_uses_fixed_fallback(client, sample_session_id, monkeypatch, output):
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value.text = output
+    monkeypatch.setattr(llm, "_genai_client", mock_client)
+    response = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]}, headers={"X-Session-Id": sample_session_id})
+    assert response.status_code == 200
+    assert response.json()["reply"] == LLM_ERROR_FALLBACK
+    assert db.get_llm_calls() == 1
+
+
+def test_llm_crisis_flag_returns_fixed_reply(client, sample_session_id, monkeypatch):
+    from app.config import CRISIS_REPLY
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value.text = json.dumps({"reply": "An improvised reply", "risk": "crisis"})
+    monkeypatch.setattr(llm, "_genai_client", mock_client)
+    response = client.post("/chat", json={"messages": [{"role": "user", "content": "I feel unsafe"}]}, headers={"X-Session-Id": sample_session_id})
+    assert response.json()["crisis"] is True
+    assert response.json()["reply"] == CRISIS_REPLY
+
+
+def test_failed_provider_attempt_consumes_budget_without_retry(client, sample_session_id, monkeypatch):
+    mock_client = MagicMock()
+    mock_client.models.generate_content.side_effect = RuntimeError("Unavailable")
+    monkeypatch.setattr(llm, "_genai_client", mock_client)
+    monkeypatch.setattr(settings, "max_llm_calls", 1)
+    payload = {"messages": [{"role": "user", "content": "Hello"}]}
+    headers = {"X-Session-Id": sample_session_id}
+    assert client.post("/chat", json=payload, headers=headers).json()["remaining_calls"] == 0
+    assert client.post("/chat", json=payload, headers=headers).json()["reply"] == BUDGET_FALLBACK
+    mock_client.models.generate_content.assert_called_once()
+
+
+def test_missing_api_key_does_not_consume_budget(client, sample_session_id, monkeypatch):
+    monkeypatch.setattr(llm, "_genai_client", None)
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    response = client.post("/chat", json={"messages": [{"role": "user", "content": "Hello"}]}, headers={"X-Session-Id": sample_session_id})
+    assert response.json()["reply"] == LLM_ERROR_FALLBACK
+    assert db.get_llm_calls() == 0

@@ -1,223 +1,240 @@
-import React, { useState, useEffect } from 'react';
-import TrendLine from '../components/TrendLine';
-import { api } from '../api';
-import { resetSessionId } from '../session';
+import React, { useEffect, useState } from "react";
+import TrendLine from "../components/TrendLine";
+import Dialog from "../components/Dialog";
+import Icon from "../components/Icon";
+import { api } from "../api";
+import { resetSessionId } from "../session";
 
-export default function History({ onNewCheckIn }) {
-  const [historyItems, setHistoryItems] = useState([]);
+export default function History({
+  onNewCheckIn,
+  onDataDeleted,
+  onBusyChange,
+  chatBusy,
+}) {
+  const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorText, setErrorText] = useState(null);
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [error, setError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
-  const fetchHistory = async () => {
+  async function fetchHistory() {
     setIsLoading(true);
-    setErrorText(null);
+    setError(null);
     try {
       const res = await api.getHistory();
-      setHistoryItems(res.items || []);
+      setItems(res.items || []);
     } catch (err) {
-      setErrorText(err.message || 'Could not load your history.');
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  };
-
+  }
   useEffect(() => {
-    fetchHistory();
+    let mounted = true;
+    api
+      .getHistory()
+      .then((res) => {
+        if (mounted) setItems(res.items || []);
+      })
+      .catch((err) => {
+        if (mounted) setError(err.message);
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const handleDeleteData = async () => {
+  async function deleteData() {
+    if (chatBusy || isLoading) return;
     setIsDeleting(true);
+    setDeleteError(null);
+    onBusyChange(true);
     try {
       await api.deleteMyData();
       resetSessionId();
-      setHistoryItems([]);
-      setShowConfirmDelete(false);
+      setItems([]);
+      setError(null);
+      setDeleted(true);
+      setConfirmDelete(false);
+      onDataDeleted?.();
     } catch (err) {
-      alert(`Could not delete: ${err.message}`);
+      setDeleteError(err.message);
     } finally {
       setIsDeleting(false);
+      onBusyChange(false);
     }
-  };
-
-  const formatDate = (isoString) => {
-    try {
-      const d = new Date(isoString);
-      return d.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (e) {
-      return isoString;
-    }
-  };
+  }
+  function formatDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? "Date unavailable"
+      : new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(date);
+  }
 
   return (
     <div className="history-page animate-fade-in">
-      <div className="history-header" style={{ marginBottom: '1.25rem' }}>
-        <h2 className="title-sm" style={{ fontSize: '1.25rem', fontWeight: 600 }}>
-          Check-in History & Trend
-        </h2>
-        <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Track your habit-based wellbeing signals over time.
-        </p>
+      <div className="page-intro">
+        <span className="eyebrow">Every small step counts</span>
+        <h1 className="page-title">
+          Your journey, <em>so far.</em>
+        </h1>
+        <p>A little perspective on how your everyday habits change.</p>
       </div>
-
+      {deleted && (
+        <div className="notice notice-success" role="status">
+          <Icon name="check" size={18} /> Your saved check-ins and messages have
+          been deleted.
+        </div>
+      )}
       {isLoading ? (
-        <div className="card text-center" style={{ padding: '2rem' }}>
-          <span className="text-sm">Loading your check-ins...</span>
+        <div className="card loading-state" role="status">
+          <span className="loading-orbit" /> Gathering your check-ins…
         </div>
-      ) : errorText ? (
-        <div className="card text-center" style={{ padding: '2rem' }}>
-          <p className="text-sm" style={{ color: 'var(--danger)', marginBottom: '1rem' }}>
-            {errorText}
-          </p>
-          <button className="btn btn-secondary" onClick={fetchHistory}>Retry</button>
+      ) : error ? (
+        <div className="card empty-state" role="alert">
+          <Icon name="cloud" size={32} />
+          <h2>We couldn’t load your journey.</h2>
+          <p>{error}</p>
+          <button className="btn btn-secondary" onClick={fetchHistory}>
+            Try again
+          </button>
         </div>
-      ) : (
+      ) : items.length ? (
         <>
-          <TrendLine items={historyItems} />
-
-          {historyItems.length > 0 ? (
-            <div className="history-list">
-              <h3 className="text-sm" style={{ fontWeight: 600, marginBottom: '0.6rem', color: 'var(--muted)' }}>
-                Past Assessments
-              </h3>
-              {historyItems.map((item) => (
-                <div key={item.id} className="history-item-row card">
-                  <div className="item-meta">
-                    <span className="item-date">{formatDate(item.created_at)}</span>
-                    <span className={`item-band-tag ${item.band.toLowerCase()}`}>
-                      {item.band}
-                    </span>
-                  </div>
-                  <div className="item-score">
-                    <strong>{item.score.toFixed(1)}</strong> <span className="unit">/ 10</span>
-                  </div>
-                </div>
-              ))}
-
-              <div className="danger-zone card" style={{ marginTop: '2rem', border: '1px solid rgba(181, 73, 63, 0.2)' }}>
-                <div style={{ marginBottom: '0.75rem' }}>
-                  <h4 style={{ fontSize: '0.92rem', color: 'var(--danger)', fontWeight: 600 }}>
-                    Privacy & Data Deletion
-                  </h4>
-                  <p className="text-xs" style={{ color: 'var(--muted)', marginTop: '2px' }}>
-                    Permanently wipe all your check-in scores and chat messages stored on this server.
-                  </p>
-                </div>
-                <button
-                  id="delete-data-btn"
-                  className="btn btn-danger-outline"
-                  style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
-                  onClick={() => setShowConfirmDelete(true)}
-                >
-                  Delete my data
-                </button>
-              </div>
+          <section className="card history-trend">
+            <div className="section-heading">
+              <h2>Your wellbeing estimates</h2>
+              <span className="badge">
+                {items.length} check-in{items.length !== 1 ? "s" : ""}
+              </span>
             </div>
-          ) : (
-            <div className="empty-history card text-center" style={{ padding: '2.5rem 1rem' }}>
-              <p className="subtitle" style={{ marginBottom: '1rem' }}>You haven't recorded any check-ins yet.</p>
-              <button className="btn btn-primary" onClick={onNewCheckIn}>
-                Take your first check-in
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
-      {showConfirmDelete && (
-        <div className="confirm-modal-overlay" role="dialog" aria-modal="true">
-          <div className="confirm-modal-card card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--danger)', marginBottom: '0.5rem' }}>
-              Confirm Data Deletion
-            </h3>
-            <p className="text-sm" style={{ color: 'var(--text)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
-              Are you sure you want to delete all your history and messages? This action is permanent and cannot be undone.
+            <TrendLine items={items} />
+            <p className="text-xs">
+              A reflection of habits, not a measure of your worth. These
+              estimates are not a diagnosis.
             </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setShowConfirmDelete(false)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                id="confirm-delete-btn"
-                className="btn btn-danger-outline"
-                style={{ background: 'var(--danger)', color: '#FFFFFF' }}
-                onClick={handleDeleteData}
-                disabled={isDeleting}
-              >
-                {isDeleting ? 'Deleting...' : 'Yes, Delete Everything'}
-              </button>
-            </div>
+          </section>
+          <div className="section-heading">
+            <h2>Past check-ins</h2>
+            <button className="text-button" onClick={onNewCheckIn}>
+              Check in again <Icon name="arrow" size={16} />
+            </button>
           </div>
+          <ol className="history-list">
+            {[...items].reverse().map((item) => (
+              <li key={item.id} className="history-item-row">
+                <span className="history-item-icon">
+                  <Icon name="leaf" />
+                </span>
+                <div className="item-meta">
+                  <strong>Wellbeing check-in</strong>
+                  <span className="text-xs">{formatDate(item.created_at)}</span>
+                </div>
+                <span className={`band-pill ${item.band.toLowerCase()}`}>
+                  {item.band}
+                </span>
+                <span className="item-score">
+                  {item.score.toFixed(1)}
+                  <small>/10</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        <div className="card empty-state">
+          <span className="empty-symbol">
+            <Icon name="trend" size={34} />
+          </span>
+          <h2>Your story starts with a check-in.</h2>
+          <p>
+            You don’t need a perfect routine. Just a moment to notice how you’re
+            doing.
+          </p>
+          <button className="btn btn-primary" onClick={onNewCheckIn}>
+            Take your first check-in <Icon name="arrow" size={18} />
+          </button>
         </div>
       )}
-
-      <style>{`
-        .history-item-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1rem 1.25rem;
-          margin-bottom: 0.6rem;
-        }
-        .item-meta {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .item-date {
-          font-size: 0.85rem;
-          color: var(--muted);
-        }
-        .item-band-tag {
-          font-size: 0.75rem;
-          font-weight: 600;
-          width: fit-content;
-          padding: 2px 8px;
-          border-radius: var(--radius-pill);
-        }
-        .item-band-tag.good { background: var(--accent-soft); color: var(--accent); }
-        .item-band-tag.moderate { background: rgba(201, 131, 58, 0.15); color: var(--warn); }
-        .item-band-tag.low { background: var(--danger-soft); color: var(--danger); }
-        .item-score {
-          font-size: 1.35rem;
-        }
-        .item-score .unit {
-          font-size: 0.85rem;
-          color: var(--muted);
-          font-weight: normal;
-        }
-        .confirm-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.45);
-          backdrop-filter: blur(4px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem;
-          z-index: 1000;
-        }
-        .confirm-modal-card {
-          max-width: 400px;
-          width: 100%;
-          margin: 0;
-          box-shadow: var(--shadow-lg);
-        }
-      `}</style>
+      <aside className="privacy-settings">
+        <span className="privacy-settings-icon">
+          <Icon name="shield" size={22} />
+        </span>
+        <div>
+          <h2>Your space. Your choice.</h2>
+          <p>
+            Delete all saved check-ins and chat messages for this browser
+            session, anytime.{" "}
+            {chatBusy &&
+              "Wait for your current chat reply to finish before deleting."}
+          </p>
+          <button
+            id="delete-data-btn"
+            className="text-button danger-text"
+            disabled={chatBusy || isLoading}
+            onClick={() => {
+              setDeleteError(null);
+              setConfirmDelete(true);
+            }}
+          >
+            <Icon name="trash" size={15} /> Delete my data
+          </button>
+        </div>
+      </aside>
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        titleId="delete-title"
+        busy={isDeleting}
+      >
+        <span className="modal-symbol danger-text">
+          <Icon name="trash" size={26} />
+        </span>
+        <h2 id="delete-title" className="page-title">
+          Clear your saved data?
+        </h2>
+        <p className="modal-description">
+          This permanently deletes your check-ins and messages from this app’s
+          server. You’ll start with a fresh session. This cannot be undone.
+        </p>
+        <p className="text-xs">
+          This does not delete any records retained by Google under its own data
+          policies.
+        </p>
+        {deleteError && (
+          <p className="notice notice-error" role="alert">
+            {deleteError}
+          </p>
+        )}
+        <div className="modal-actions">
+          <button
+            className="btn btn-secondary"
+            onClick={() => setConfirmDelete(false)}
+            disabled={isDeleting}
+          >
+            Keep my data
+          </button>
+          <button
+            id="confirm-delete-btn"
+            className="btn btn-danger"
+            onClick={deleteData}
+            disabled={isDeleting}
+          >
+            {isDeleting ? "Deleting…" : "Delete my data"}
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }

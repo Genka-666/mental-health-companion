@@ -53,3 +53,9 @@ def test_predict_invalid_data(client, sample_session_id, valid_predict_payload):
         headers={"X-Session-Id": sample_session_id}
     )
     assert response2.status_code == 422
+
+
+@pytest.mark.parametrize("session_id", [str(uuid.uuid1()), str(uuid.uuid3(uuid.NAMESPACE_DNS, "example.com"))])
+def test_session_rejects_non_v4_uuid(client, session_id):
+    response = client.get("/history", headers={"X-Session-Id": session_id})
+    assert response.status_code == 400

@@ -38,3 +38,22 @@ def test_history_and_delete_cascade(client, sample_session_id, valid_predict_pay
     h_after = client.get("/history", headers={"X-Session-Id": sample_session_id})
     assert h_after.status_code == 200
     assert h_after.json()["items"] == []
+
+
+def test_inflight_reply_does_not_recreate_deleted_session(client, sample_session_id, monkeypatch):
+    from app import db
+    from app.routers import chat
+
+    def delete_during_provider_request(messages):
+        db.delete_session(sample_session_id)
+        return 'A delayed reply', False, 49
+
+    monkeypatch.setattr(chat, 'call_gemini_chat', delete_during_provider_request)
+    response = client.post('/chat', json={'messages': [{'role': 'user', 'content': 'Hello'}]}, headers={'X-Session-Id': sample_session_id})
+    assert response.status_code == 200
+    conn = db.get_connection()
+    try:
+        assert conn.execute('SELECT COUNT(*) FROM sessions WHERE id = ?', (sample_session_id,)).fetchone()[0] == 0
+        assert conn.execute('SELECT COUNT(*) FROM messages WHERE session_id = ?', (sample_session_id,)).fetchone()[0] == 0
+    finally:
+        conn.close()

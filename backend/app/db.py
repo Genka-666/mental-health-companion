@@ -1,5 +1,4 @@
 import sqlite3
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from .config import settings
@@ -113,23 +112,33 @@ def get_history(session_id: str, conn: sqlite3.Connection | None = None) -> list
         if should_close:
             conn.close()
 
-def save_message(session_id: str, role: str, content: str, conn: sqlite3.Connection | None = None) -> int:
+def save_message(
+    session_id: str,
+    role: str,
+    content: str,
+    conn: sqlite3.Connection | None = None,
+    *,
+    create_session: bool = True,
+) -> int | None:
+    """Save a turn; delayed replies must not recreate an erased session."""
     should_close = False
     if conn is None:
         conn = get_connection()
         should_close = True
     try:
-        ensure_session(session_id, conn)
+        if create_session:
+            ensure_session(session_id, conn)
         now = datetime.now(timezone.utc).isoformat()
         with conn:
             cursor = conn.execute(
                 """
                 INSERT INTO messages (session_id, role, content, created_at)
-                VALUES (?, ?, ?, ?);
+                SELECT ?, ?, ?, ?
+                WHERE EXISTS (SELECT 1 FROM sessions WHERE id = ?);
                 """,
-                (session_id, role, content, now)
+                (session_id, role, content, now, session_id)
             )
-            return cursor.lastrowid
+            return cursor.lastrowid if cursor.rowcount else None
     finally:
         if should_close:
             conn.close()
@@ -160,17 +169,15 @@ def get_llm_calls(conn: sqlite3.Connection | None = None) -> int:
         if should_close:
             conn.close()
 
-def increment_llm_calls(conn: sqlite3.Connection | None = None) -> int:
-    should_close = False
-    if conn is None:
-        conn = get_connection()
-        should_close = True
+def reserve_llm_call(limit: int) -> bool:
+    """Atomically reserve one external attempt without exceeding the shared cap."""
+    conn = get_connection()
     try:
         with conn:
-            conn.execute("UPDATE llm_usage SET calls = calls + 1 WHERE id = 1;")
-            cursor = conn.execute("SELECT calls FROM llm_usage WHERE id = 1;")
-            row = cursor.fetchone()
-            return row["calls"] if row else 0
+            cursor = conn.execute(
+                "UPDATE llm_usage SET calls = calls + 1 WHERE id = 1 AND calls < ?;",
+                (limit,),
+            )
+            return cursor.rowcount == 1
     finally:
-        if should_close:
-            conn.close()
+        conn.close()
