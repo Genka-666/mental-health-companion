@@ -16,7 +16,7 @@
 - [ ] Phase 7 (optional): Leaner model
 
 ## Current step
-Resolved the live chat fallback: a diagnostic request to Gemini 3.8 Flash returned HTTP 503, while Gemini 3.5 Flash-Lite returned a valid reply with the same key. Updated the local backend environment, default model and example environments to `gemini-3.5-flash-lite`. The running server reloaded automatically, and a real `/chat` request returned HTTP 200 with a valid non-crisis reply in 13.43 seconds. All **66 backend tests pass** with mocked Gemini calls and temporary databases. Broader conversation-quality review, browser checks and deployment remain pending. Earlier chat refinements and verification are recorded below.
+Preparing the user-selected free demo deployment: Vercel frontend and Render free backend, with accepted resets of SQLite data and the shared call counter. Added `frontend/vercel.json`, Vercel-only backend URL validation in `frontend/vite.config.js`, `.vercel/` ignores, root `render.yaml`, and `docs/DEPLOYMENT.md`. Frontend tests and the production build pass; the Vercel build accepts a public HTTPS backend URL and rejects missing, insecure/local and credential-bearing values. Hosting account authentication, creation of the services, real backend/frontend URLs, CORS configuration and public verification remain pending. The latest full backend suite has 66 passing cases; no additional live Gemini calls were made during deployment preparation.
 
 ## Notes and problems
 The following Windows results are historical; they have not been reproduced in the current Linux environment.

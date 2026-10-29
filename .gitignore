@@ -17,6 +17,7 @@ env/
 node_modules/
 dist/
 .vite/
+.vercel/
 
 # SQLite databases
 backend/data/*.db
