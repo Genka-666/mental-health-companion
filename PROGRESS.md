@@ -16,7 +16,7 @@
 - [ ] Phase 7 (optional): Leaner model
 
 ## Current step
-Preparing the user-selected free demo deployment: Vercel frontend and Render free backend, with accepted resets of SQLite data and the shared call counter. Added `frontend/vercel.json`, Vercel-only backend URL validation in `frontend/vite.config.js`, `.vercel/` ignores, root `render.yaml`, and `docs/DEPLOYMENT.md`. Frontend tests and the production build pass; the Vercel build accepts a public HTTPS backend URL and rejects missing, insecure/local and credential-bearing values. Hosting account authentication, creation of the services, real backend/frontend URLs, CORS configuration and public verification remain pending. The latest full backend suite has 66 passing cases; no additional live Gemini calls were made during deployment preparation.
+Free demo deployed on 30 October 2026 (Asia/Kolkata): frontend `https://mental-health-companion-dun.vercel.app`, backend `https://mental-health-companion-2f9p.onrender.com`. Vercel production deployment `dpl_74hj7PabEuB3kdzGVesjU3oVJ2ri` is READY and the public frontend returns HTTP 200. Vercel uses the Render API URL in production and preview environments; exact production-origin CORS passed. Hosted prediction, history, one real Gemini reply, crisis bypass and deletion passed; the synthetic session was removed and 49 calls remained. Frontend tests/build validation and the earlier 66 backend tests pass. The user accepted free-service resets of SQLite data and the shared counter. Full hosted browser interaction remains for a manual check. See `docs/DEPLOYMENT.md`.
 
 ## Notes and problems
 The following Windows results are historical; they have not been reproduced in the current Linux environment.

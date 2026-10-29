@@ -1,6 +1,19 @@
 # Free demo deployment: Vercel + Render
 
-Status: configuration prepared and checked locally; no hosted services created yet.
+Status: deployed on 30 October 2026 (Asia/Kolkata).
+
+- Frontend: https://mental-health-companion-dun.vercel.app
+- Backend: https://mental-health-companion-2f9p.onrender.com
+- Production deployment: `dpl_74hj7PabEuB3kdzGVesjU3oVJ2ri` (READY).
+- Hosted checks passed: health, exact-origin CORS, prediction, history, a real
+  Gemini reply, fixed crisis response with no extra provider call, and deletion
+  of the synthetic session. The new backend had 49 calls remaining after testing.
+
+Vercel project: `the-seniors/mental-health-companion`, connected to
+`Genka-666/mental-health-companion` on GitHub, with Root Directory `frontend`
+and Node.js `22.x`. Assigned production domain:
+`https://mental-health-companion-dun.vercel.app`. The public frontend returns
+HTTP 200. Full browser interaction on the hosted site still needs a manual check.
 
 The selected setup is Vercel for the React frontend and Render's free Python web
 service for the backend. Render's free filesystem is temporary: saved assessments,
@@ -15,13 +28,13 @@ Import the repository as a Render Blueprint using the root `render.yaml`. It
 selects the Free plan, the `backend` directory, Python 3.14.0 (the locally tested
 version), the existing requirements and model, and `/health` for startup checks.
 
-Render prompts for two values:
+Render prompts for the backend secret:
 
 - `GEMINI_API_KEY`: enter the key directly in Render; never put it in Git or chat.
-- `CORS_ORIGINS`: the exact frontend origin, such as
-  `https://your-project.vercel.app`, without a trailing slash. If the frontend
-  project has not been created yet, use `http://localhost:5173` temporarily and
-  update this setting after Vercel assigns the production domain.
+
+The Blueprint now sets `CORS_ORIGINS` to the assigned production frontend origin,
+`https://mental-health-companion-dun.vercel.app`. Update this setting if the
+frontend domain changes; do not add a trailing slash.
 
 Wait for the service to report healthy, then record its public HTTPS URL and
 verify `GET /health` returns `{"status":"ok"}`. Free services may sleep after
@@ -60,7 +73,8 @@ consumes one backend budget slot, including provider failures.
 
 Local verification completed during preparation: frontend tests pass; the Vercel
 build succeeds with a public HTTPS backend setting; missing, local and
-credential-bearing settings are rejected. Hosted verification remains pending.
+credential-bearing settings are rejected. The hosted API checks listed above
+passed using a fresh synthetic session, which was removed afterward.
 
 References: [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite),
 [Render Blueprints](https://render.com/docs/blueprint-spec),
